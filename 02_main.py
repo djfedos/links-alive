@@ -1,0 +1,131 @@
+from bs4 import BeautifulSoup
+import httpx
+from urllib.parse import urlparse
+import logging
+
+logging.basicConfig(format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S', filename='links-alive.log', filemode='a')
+
+# discovered_links = set()
+# valid_links = set()
+# invalid_links = set()
+
+
+def extract_links(webpage):
+    site_address = urlparse(webpage).scheme + '://' + urlparse(webpage).netloc
+
+    local_discovered_links = set()
+    req = httpx.get(webpage)
+
+    soup = BeautifulSoup(req.text, 'lxml')
+    anchors = soup.find_all('a')
+
+    for a in anchors:
+        link = a.attrs.get('href')
+
+        if not link:
+            pass
+        elif link.startswith('https://') or link.startswith('http://'):
+            pass
+        elif link == '.' or link == '/' :
+            link = None
+        elif link.startswith('../../../'):
+            link = site_address + '/' + link[9:]
+        elif link.startswith('../../'):
+            link = site_address + '/' + link[6:]
+        elif link.startswith('../'):
+            link = site_address + '/' + link[3:]
+        elif link.startswith('#'):
+            link = site_address + '/' + link
+        else:
+            link = webpage + '/' + link
+
+        if link:
+            local_discovered_links.add(link)
+            print(f'Added {link} to local_discovered_links')
+
+    return local_discovered_links
+
+
+def validate_link(link):
+    try:
+        req_link = httpx.get(link)
+        if req_link.status_code == 200:
+            print(f'Link {link} is valid')
+            return True
+        else:
+            print(f'Link {link} is invalid')
+            return False
+    except httpx.RemoteProtocolError:
+        print(f'RemoteProtocolError, {link} is considered invalid')
+        return False
+    except httpx.UnsupportedProtocol:
+        print(f'UnsupportedProtocol, {link} is considered invalid')
+        return False
+    except httpx.ConnectError:
+        print(f'ConnectError [SSL: CERTIFICATE_VERIFY_FAILED], {link} is considered invalid')
+        return False
+    except httpx.ConnectTimeout:
+        print(f'ConnectTimeout, {link} is considered invalid')
+        return False
+
+def output_files(valid_links, invalid_links):
+    # Path('out').absolute().parent.mkdir(exist_ok=True, parents=True)
+    with open('valid_links.txt', 'a') as valid:
+        for link in valid_links:
+            valid.write(link)
+            valid.write('\n')
+
+    with open('invalid_links.txt', 'a') as invalid:
+        for link in invalid_links:
+            invalid.write(link)
+            invalid.write('\n')
+
+
+def crawl(site_address):
+    discovered_links = set()
+    discovered_links.add(site_address)
+    valid_links = set()
+    invalid_links = set()
+    to_be_validated = discovered_links
+    left_to_validate = 1
+    while to_be_validated:
+        print('Validation loop started')
+        validated_in_current_loop = set()
+        for link in to_be_validated:
+            if validate_link(link):
+                validated_in_current_loop.add(link)
+                with open('val.log', 'a') as val_log:
+                    val_log.write(link + '\n')
+            else:
+                invalid_links.add(link)
+                with open('inval.log', 'a') as inval_log:
+                    inval_log.write(link + '\n')
+            left_to_validate -= 1
+            print(f'{left_to_validate} left to validate in this loop')
+        valid_links |= validated_in_current_loop
+        print('Update valid_links')
+
+        for link in validated_in_current_loop:
+            if link.startswith(site_address):
+                print(f'Extracting links from {link}...')
+                discovered_links |= extract_links(link)
+                print('Update discovered_links')
+        to_be_validated = discovered_links - valid_links - invalid_links
+        left_to_validate = len(to_be_validated)
+        logging.debug(f'{len(to_be_validated)} links to be validated now')
+        print(f'{len(to_be_validated)} links to be validated now')
+        logging.debug(f'{len(valid_links)} links are valid')
+        print(f'{len(valid_links)} links are valid')
+        logging.debug(f'{len(invalid_links)} links are invalid')
+        print(f'{len(invalid_links)} links are invalid')
+        logging.debug(f'{len(discovered_links)} links are discovered')
+        print(f'{len(discovered_links)} links are discovered')
+
+
+    output_files(valid_links=valid_links, invalid_links=invalid_links)
+
+
+if __name__ == '__main__':
+    crawl('https://yairdar.github.io')
+
+
