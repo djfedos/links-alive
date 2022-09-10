@@ -2,6 +2,7 @@ from bs4 import BeautifulSoup
 import httpx
 from urllib.parse import urlparse, urljoin
 import logging
+import fire
 
 logging.basicConfig(filename='invalid.log', filemode='w', format='%(asctime)s - %(message)s', level=logging.INFO)
 
@@ -87,7 +88,11 @@ def output_files(valid_links, invalid_links):
             invalid.write('\n')
 
 
-def crawl(site_address):
+def crawl(site_address=''):
+    if not site_address:
+        print('Usage: python links-alive.py [SITE_ADDRESS]')
+        print('E.g.: python links-alive.py "https://djfedos.github.io"')
+        return False
     discovered_links = set()
     discovered_links.add(site_address)
     valid_links = set()
@@ -126,6 +131,4 @@ def crawl(site_address):
 
 
 if __name__ == '__main__':
-    crawl('https://yairdar.github.io')
-
-
+    fire.Fire(crawl)
