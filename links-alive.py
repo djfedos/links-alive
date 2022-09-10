@@ -6,8 +6,6 @@ import fire
 
 logging.basicConfig(filename='invalid.log', filemode='w', format='%(asctime)s - %(message)s', level=logging.INFO)
 
-# TODO: Add logging, add CLI
-
 
 def extract_links(webpage):
     site_address = urlparse(webpage).scheme + '://' + urlparse(webpage).netloc
@@ -73,19 +71,6 @@ def validate_link(link):
         logging.info(inv_message)
         print(f'ReadTimeout, {link} is considered invalid')
         return False
-
-
-def output_files(valid_links, invalid_links):
-    # Path('out').absolute().parent.mkdir(exist_ok=True, parents=True)
-    with open('valid_links.txt', 'a') as valid:
-        for link in valid_links:
-            valid.write(link)
-            valid.write('\n')
-
-    with open('invalid_links.txt', 'a') as invalid:
-        for link in invalid_links:
-            invalid.write(link)
-            invalid.write('\n')
 
 
 def crawl(site_address=''):
