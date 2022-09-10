@@ -1,9 +1,6 @@
 from bs4 import BeautifulSoup
 import httpx
-from urllib.parse import urlparse
-import logging
-
-logging.basicConfig(format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S', filename='links-alive.log', filemode='a')
+from urllib.parse import urlparse, urljoin
 
 # discovered_links = set()
 # valid_links = set()
@@ -24,20 +21,10 @@ def extract_links(webpage):
 
         if not link:
             pass
-        elif link.startswith('https://') or link.startswith('http://'):
-            pass
-        elif link == '.' or link == '/' :
+        elif link == '.' or link == '/':
             link = None
-        elif link.startswith('../../../'):
-            link = site_address + '/' + link[9:]
-        elif link.startswith('../../'):
-            link = site_address + '/' + link[6:]
-        elif link.startswith('../'):
-            link = site_address + '/' + link[3:]
-        elif link.startswith('#'):
-            link = site_address + '/' + link
         else:
-            link = webpage + '/' + link
+            link = urljoin(webpage, link)
 
         if link:
             local_discovered_links.add(link)
@@ -66,6 +53,9 @@ def validate_link(link):
         return False
     except httpx.ConnectTimeout:
         print(f'ConnectTimeout, {link} is considered invalid')
+        return False
+    except httpx.ReadTimeout:
+        print(f'ReadTimeout, {link} is considered invalid')
         return False
 
 def output_files(valid_links, invalid_links):
@@ -112,13 +102,9 @@ def crawl(site_address):
                 print('Update discovered_links')
         to_be_validated = discovered_links - valid_links - invalid_links
         left_to_validate = len(to_be_validated)
-        logging.debug(f'{len(to_be_validated)} links to be validated now')
         print(f'{len(to_be_validated)} links to be validated now')
-        logging.debug(f'{len(valid_links)} links are valid')
         print(f'{len(valid_links)} links are valid')
-        logging.debug(f'{len(invalid_links)} links are invalid')
         print(f'{len(invalid_links)} links are invalid')
-        logging.debug(f'{len(discovered_links)} links are discovered')
         print(f'{len(discovered_links)} links are discovered')
 
 
