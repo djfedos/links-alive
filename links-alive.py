@@ -36,7 +36,7 @@ def extract_links(webpage):
 def validate_link(link):
     try:
         req_link = httpx.get(link)
-        if req_link.status_code == 200:
+        if req_link.is_success or req_link.is_redirect:
             print(f'Link {link} is valid')
             return True
         else:
