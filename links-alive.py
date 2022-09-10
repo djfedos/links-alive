@@ -1,10 +1,11 @@
 from bs4 import BeautifulSoup
 import httpx
 from urllib.parse import urlparse, urljoin
+import logging
 
-# discovered_links = set()
-# valid_links = set()
-# invalid_links = set()
+logging.basicConfig(filename='invalid.log', filemode='w', format='%(asctime)s - %(message)s', level=logging.INFO)
+
+# TODO: Add logging, add CLI
 
 
 def extract_links(webpage):
@@ -40,23 +41,38 @@ def validate_link(link):
             print(f'Link {link} is valid')
             return True
         else:
-            print(f'Link {link} is invalid')
+            inv_message = f'Link {link} is invalid'
+            print(inv_message)
+            logging.info(inv_message)
             return False
+
     except httpx.RemoteProtocolError:
-        print(f'RemoteProtocolError, {link} is considered invalid')
+        inv_message = f'RemoteProtocolError, {link} is considered invalid'
+        print(inv_message)
+        logging.info(inv_message)
         return False
     except httpx.UnsupportedProtocol:
-        print(f'UnsupportedProtocol, {link} is considered invalid')
+        inv_message = f'UnsupportedProtocol, {link} is considered invalid'
+        print(inv_message)
+        logging.info(inv_message)
         return False
     except httpx.ConnectError:
-        print(f'ConnectError [SSL: CERTIFICATE_VERIFY_FAILED], {link} is considered invalid')
+        inv_message = f'ConnectError [SSL: CERTIFICATE_VERIFY_FAILED], {link} is considered invalid'
+        print(inv_message)
+        logging.info(inv_message)
         return False
     except httpx.ConnectTimeout:
-        print(f'ConnectTimeout, {link} is considered invalid')
+        inv_message = f'ConnectTimeout, {link} is considered invalid'
+        print(inv_message)
+        logging.info(inv_message)
         return False
     except httpx.ReadTimeout:
+        inv_message = f'ReadTimeout, {link} is considered invalid'
+        print(inv_message)
+        logging.info(inv_message)
         print(f'ReadTimeout, {link} is considered invalid')
         return False
+
 
 def output_files(valid_links, invalid_links):
     # Path('out').absolute().parent.mkdir(exist_ok=True, parents=True)
@@ -84,12 +100,10 @@ def crawl(site_address):
         for link in to_be_validated:
             if validate_link(link):
                 validated_in_current_loop.add(link)
-                with open('val.log', 'a') as val_log:
+                with open('valid.log', 'a') as val_log:
                     val_log.write(link + '\n')
             else:
                 invalid_links.add(link)
-                with open('inval.log', 'a') as inval_log:
-                    inval_log.write(link + '\n')
             left_to_validate -= 1
             print(f'{left_to_validate} left to validate in this loop')
         valid_links |= validated_in_current_loop
@@ -107,8 +121,8 @@ def crawl(site_address):
         print(f'{len(invalid_links)} links are invalid')
         print(f'{len(discovered_links)} links are discovered')
 
-
-    output_files(valid_links=valid_links, invalid_links=invalid_links)
+    print('Crawling complete')
+    return True
 
 
 if __name__ == '__main__':
