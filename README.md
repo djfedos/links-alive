@@ -5,7 +5,7 @@ Usage:
 `python links-alive.py [SITE_ADDRESS]`
 
 Example:  
-`python links-alive.py "[https://djfedos.github.io]"`
+`python links-alive.py "[https://djfedos.github.io](https://djfedos.github.io)"`
 
 **links-alive** outputs two files: `valid.log` and `invalid.log`, with valid and indvalid links respectively.  
 Not all the links in `invalid.log` are truly invalid, but it's worth checking them manually just in case.  
