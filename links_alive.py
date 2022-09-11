@@ -8,7 +8,6 @@ logging.basicConfig(filename='invalid.log', filemode='w', format='%(asctime)s - 
 
 
 def extract_links(webpage):
-    site_address = urlparse(webpage).scheme + '://' + urlparse(webpage).netloc
 
     local_discovered_links = set()
     req = httpx.get(webpage)
@@ -75,8 +74,8 @@ def validate_link(link):
 
 def crawl(site_address=''):
     if not site_address:
-        print('Usage: python links-alive.py [SITE_ADDRESS]')
-        print('E.g.: python links-alive.py "https://djfedos.github.io"')
+        print('Usage: python links_alive.py [SITE_ADDRESS]')
+        print('E.g.: python links_alive.py "https://djfedos.github.io"')
         return False
     discovered_links = set()
     discovered_links.add(site_address)
