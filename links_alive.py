@@ -1,6 +1,6 @@
 from bs4 import BeautifulSoup
 import httpx
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urljoin
 import logging
 import fire
 
