@@ -1,118 +1,178 @@
 from bs4 import BeautifulSoup
 import httpx
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urljoin, urlparse
 import logging
 import fire
+from collections import deque
 
 logging.basicConfig(filename='invalid.log', filemode='w', format='%(asctime)s - %(message)s', level=logging.INFO)
 
 
-def extract_links(webpage):
-
-    local_discovered_links = set()
-    req = httpx.get(webpage)
-
-    soup = BeautifulSoup(req.text, 'lxml')
-    anchors = soup.find_all('a')
-
-    for a in anchors:
-        link = a.attrs.get('href')
-
-        if not link:
-            pass
-        elif link == '.' or link == '/':
-            link = None
-        else:
-            link = urljoin(webpage, link)
-
-        if link:
-            local_discovered_links.add(link)
-            print(f'Added {link} to local_discovered_links')
-
-    return local_discovered_links
+class Page:
+    def __init__(self, address: str):
+        self.address = address
+        self.valid_links = set()
+        self.invalid_links = set()
 
 
-def validate_link(link):
-    try:
-        req_link = httpx.get(link)
-        if req_link.is_success or req_link.is_redirect:
-            print(f'Link {link} is valid')
-            return True
-        else:
-            inv_message = f'Link {link} is invalid'
+class Link:
+    def __init__(self, page_of_origin: Page, link_url: str):
+        self.page_of_origin = page_of_origin
+        # link.url is a unique property to store in sets
+        self.url = urljoin(page_of_origin.address, link_url)
+        self.url_parsed = urlparse(self.url)
+        self.website = self.url_parsed.scheme + '://' + self.url_parsed.netloc
+        self.stripped_url = self.website + self.url_parsed.path
+
+
+class Explorer:
+    # add discovered web pages of the site to this queue
+    unexplored = deque()
+    # add explored page.address to this set
+    explored = set()
+    # links to validate
+    unvalidated = deque()
+    website = None
+
+    @classmethod
+    def init_website(cls, website):
+        Explorer.website = website
+        Explorer.unexplored.append(Page(website))
+        Explorer.loop()
+        Validator.loop()
+
+
+    @classmethod
+    def output_logs(cls):
+        counter = 0
+        for page in Explorer.explored:
+            counter += 1
+            with open(f'page_{counter}.log', 'w') as page_log:
+                page_log.write(f'{page.address} \n')
+                page_log.write(f'Invalid links: \n')
+                for invalid_link in page.invalid_links:
+                    page_log.write(f'{invalid_link.url}, \n')
+                page_log.write(f'Valid links: \n')
+                for valid_link in page.valid_links:
+                    page_log.write(f'{valid_link.url} \n')
+
+    # process website pages sequentially
+    @classmethod
+    def loop(cls):
+        while Explorer.unexplored:
+            e = Explorer(Explorer.unexplored.popleft())
+            e.discover_links()
+        # when no unexplored pages left, we add a marker to the end of the links queue to break out of validation loop
+        Explorer.unvalidated.append(NotImplemented)
+
+    def __init__(self, webpage: Page):
+        self.webpage = webpage
+
+    def discover_links(self):
+        req = httpx.get(self.webpage.address)
+
+        soup = BeautifulSoup(req.text, 'lxml')
+        anchors = soup.find_all('a')
+
+        for a in anchors:
+            link_url = a.attrs.get('href')
+
+            if not link_url:
+                pass
+            elif link_url == '.' or link_url == '/':
+                link_url = None
+            else:
+                link_url = urljoin(self.webpage.address, link_url)
+
+            if link_url:
+                link = Link(page_of_origin=self.webpage, link_url=link_url)
+                Explorer.unvalidated.append(link)
+                if link.website == Explorer.website:
+                    if link.stripped_url not in Explorer.explored and link.stripped_url != self.webpage.address:
+                        Explorer.unexplored.append(Page(link.stripped_url))
+
+        Explorer.explored.add(self.webpage)
+        print(f'Added {self.webpage.address} to explored')
+
+
+class Validator:
+    # class-wide variables store all the valid and invalid links that are found at the moment
+    valid = set()
+    invalid = set()
+
+    def __init__(self, link):
+        self.link = link
+
+    @classmethod
+    def output_logs(cls):
+        with open('valid_links.log', 'w') as valid:
+            for link in Validator.valid:
+                valid.write(link)
+                valid.write('\n')
+        with open('invalid_links.log', 'w') as invalid:
+            for link in Validator.invalid:
+                invalid.write(link)
+                invalid.write('\n')
+
+    @classmethod
+    def loop(cls):
+        while True:
+            v = Validator(Explorer.unvalidated.popleft())
+            if v.link is NotImplemented:
+                break
+            v.validate_link()
+        Validator.output_logs()
+        Explorer.output_logs()
+
+    def validate_link(self):
+
+        def add_invalid(inv_message):
+            # Add link to global (Validator class-wide) valid link storage
+            Validator.invalid.add(self.link.url)
+            # Add link to local (Page instance-wide) valid link storage
+            self.link.page_of_origin.invalid_links.add(self.link)
             print(inv_message)
             logging.info(inv_message)
-            return False
 
-    except httpx.RemoteProtocolError:
-        inv_message = f'RemoteProtocolError, {link} is considered invalid'
-        print(inv_message)
-        logging.info(inv_message)
-        return False
-    except httpx.UnsupportedProtocol:
-        inv_message = f'UnsupportedProtocol, {link} is considered invalid'
-        print(inv_message)
-        logging.info(inv_message)
-        return False
-    except httpx.ConnectError:
-        inv_message = f'ConnectError [SSL: CERTIFICATE_VERIFY_FAILED], {link} is considered invalid'
-        print(inv_message)
-        logging.info(inv_message)
-        return False
-    except httpx.ConnectTimeout:
-        inv_message = f'ConnectTimeout, {link} is considered invalid'
-        print(inv_message)
-        logging.info(inv_message)
-        return False
-    except httpx.ReadTimeout:
-        inv_message = f'ReadTimeout, {link} is considered invalid'
-        print(inv_message)
-        logging.info(inv_message)
-        print(f'ReadTimeout, {link} is considered invalid')
-        return False
+        if self.link.url in Validator.valid:
+            print(f'Link {self.link.url} on the {self.link.page_of_origin.address} page is valid')
+            self.link.page_of_origin.valid_links.add(self.link)
+        elif self.link.url in Validator.invalid:
+            inv_message = f'Link {self.link.url} on the {self.link.page_of_origin.address} page is invalid'
+            print(inv_message)
+            logging.info(inv_message)
+            self.link.page_of_origin.invalid_links.add(self.link)
 
-
-def crawl(site_address=''):
-    if not site_address:
-        print('Usage: python links_alive.py [SITE_ADDRESS]')
-        print('E.g.: python links_alive.py "https://djfedos.github.io"')
-        return False
-    discovered_links = set()
-    discovered_links.add(site_address)
-    valid_links = set()
-    invalid_links = set()
-    to_be_validated = discovered_links
-    left_to_validate = 1
-    while to_be_validated:
-        print('Validation loop started')
-        validated_in_current_loop = set()
-        for link in to_be_validated:
-            if validate_link(link):
-                validated_in_current_loop.add(link)
-                with open('valid.log', 'a') as val_log:
-                    val_log.write(link + '\n')
+        try:
+            # check stripped URL to avoid false positive invalidation
+            req_link = httpx.get(self.link.stripped_url)
+            # TODO: separate algorithm for redirect validation
+            if req_link.is_success or req_link.is_redirect:
+                print(f'Link {self.link.url} on the {self.link.page_of_origin.address} page is valid')
+                # Add link to global (Validator class-wide) valid link storage
+                Validator.valid.add(self.link.url)
+                # Add link to local (Page instance-wide) valid link storage
+                self.link.page_of_origin.valid_links.add(self.link)
             else:
-                invalid_links.add(link)
-            left_to_validate -= 1
-            print(f'{left_to_validate} left to validate in this loop')
-        valid_links |= validated_in_current_loop
-        print('Update valid_links')
+                inv_message = f'Link {self.link.url} on the {self.link.page_of_origin.address} page is invalid'
+                add_invalid(inv_message=inv_message)
 
-        for link in validated_in_current_loop:
-            if link.startswith(site_address):
-                print(f'Extracting links from {link}...')
-                discovered_links |= extract_links(link)
-                print('Update discovered_links')
-        to_be_validated = discovered_links - valid_links - invalid_links
-        left_to_validate = len(to_be_validated)
-        print(f'{len(to_be_validated)} links to be validated now')
-        print(f'{len(valid_links)} links are valid')
-        print(f'{len(invalid_links)} links are invalid')
-        print(f'{len(discovered_links)} links are discovered')
-
-    print('Crawling complete')
-    return True
+        except httpx.RemoteProtocolError:
+            inv_message = f'RemoteProtocolError, {self.link.url} on the {self.link.page_of_origin.address} page is invalid'
+            add_invalid(inv_message=inv_message)
+        except httpx.UnsupportedProtocol:
+            inv_message = f'UnsupportedProtocol, {self.link.url} on the {self.liself.link.page_of_originnk.page_of_origin.address} page is invalid'
+            add_invalid(inv_message=inv_message)
+        except httpx.ConnectError:
+            inv_message = f'ConnectError [SSL: CERTIFICATE_VERIFY_FAILED], {self.link.url} on the {self.link.page_of_origin.address} page is invalid'
+            add_invalid(inv_message=inv_message)
+        except httpx.ConnectTimeout:
+            inv_message = f'ConnectTimeout, {self.link.url} on the {self.link.page_of_origin.address} page is invalid'
+            add_invalid(inv_message=inv_message)
+        except httpx.ReadTimeout:
+            inv_message = f'ReadTimeout, {self.link.url} on the {self.link.page_of_origin.address} page is invalid'
+            add_invalid(inv_message=inv_message)
 
 
 if __name__ == '__main__':
-    fire.Fire(crawl)
+    fire.Fire(Explorer.init_website)

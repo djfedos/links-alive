@@ -1,0 +1,30 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  GREETING: Are you links alive?
+
+tasks:
+  default:
+    cmds:
+      - echo "{{.GREETING}}"
+      - task -a
+    silent: true
+
+  purge-logs:
+    desc: Delete all logs
+    cmds:
+      - rm ./*.log
+
+  la:
+    decs: 'run links-alive. usage: task la -- "https://example.com"'
+    cmds:
+      - python links_alive.py {{.CLI_ARGS}}
+
+  lat:
+    decs: 'test run of links-alive on djfedos.github.io'
+    cmds:
+      - python links_alive.py "https://djfedos.github.io"
+
+
